@@ -55,6 +55,8 @@
 (deftest floor-callout-formatting
   (is (= "floor 2 12 seconds"
          (core/floor-callout {:floor 2 :arrival-time 12.0})))
-  (is (= "floor 14 31.5 seconds"
-         (core/floor-callout {:floor 14 :arrival-time 31.5}))))
+  (is (= "floor 14 31 seconds"
+         (core/floor-callout {:floor 14 :arrival-time 31.5})))
+  (is (= "floor 15 1 minute 1 second"
+         (core/floor-callout {:floor 15 :arrival-time 61.0}))))
 

@@ -43,14 +43,26 @@
          (map :spoken)
          (remove nil?))))
 
+(defn- arrival-time->mm:ss
+  [arrival-time]
+  (let [total-seconds (int arrival-time)
+        minutes (quot total-seconds 60)
+        seconds (mod total-seconds 60)]
+    (format "%d:%02d" minutes seconds)))
+
+(defn- arrival-time->spoken-text
+  [arrival-time]
+  (let [total-seconds (int arrival-time)
+        minutes (quot total-seconds 60)
+        seconds (mod total-seconds 60)]
+    (if (zero? minutes)
+      (str seconds " second" (when-not (= seconds 1) "s"))
+      (str minutes " minute" (when-not (= minutes 1) "s")
+           " " seconds " second" (when-not (= seconds 1) "s")))))
+
 (defn floor-callout
   [{:keys [floor arrival-time]}]
-  (let [seconds (if (== arrival-time (Math/floor arrival-time))
-                  (str (long arrival-time))
-                  (-> (String/format java.util.Locale/US "%.3f" (to-array [(double arrival-time)]))
-                      (str/replace #"0+$" "")
-                      (str/replace #"\.$" "")))]
-    (str "floor " floor " " seconds " seconds")))
+  (str "floor " floor " " (arrival-time->spoken-text arrival-time)))
 
 (defn- race-output-stem
   [{:keys [race]}]
@@ -175,8 +187,17 @@
       read-race-config
       build-floor-sequence))
 
+(defn- print-floor-sequence!
+  [entries]
+  (println "Arrival-time per floor:")
+  (doseq [{:keys [floor arrival-time]} entries]
+    (println (format "  floor %d -> %s" floor (arrival-time->mm:ss arrival-time))))
+  entries)
+
 (defn -main
   [& [path output-path]]
   (let [config (read-race-config (or path "data.json"))
+        entries (-> config build-floor-sequence vec)
+        _ (print-floor-sequence! entries)
         out (build-audio-track! config (or output-path (str (race-output-stem config) ".wav")))]
     (println (str "Wrote " out))))
