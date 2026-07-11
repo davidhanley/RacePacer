@@ -1,5 +1,18 @@
-[
-  [5 , 12.0],
-  [71  , 10.4]
-]
+{
+  "race": {
+    "name": "US bank LA",
+    "startFloor": 1,
+    "ghostFloors": [ 13 ]
+  },
+  "floorMap": [
+    {
+      "floors": 5,
+      "pace": 12.0
+    },
+    {
+      "floors": 71,
+      "pace": 10.5
+    }
+  ]
+}
 
