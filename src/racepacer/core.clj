@@ -43,22 +43,27 @@
          (map :spoken)
          (remove nil?))))
 
+(defn- arrival-time->parts
+  [arrival-time]
+  (let [total-seconds (int arrival-time)]
+    {:minutes (quot total-seconds 60)
+     :seconds (mod total-seconds 60)}))
+
 (defn- arrival-time->mm:ss
   [arrival-time]
-  (let [total-seconds (int arrival-time)
-        minutes (quot total-seconds 60)
-        seconds (mod total-seconds 60)]
+  (let [{:keys [minutes seconds]} (arrival-time->parts arrival-time)]
     (format "%d:%02d" minutes seconds)))
+
+(defn- pluralize
+  [n word]
+  (str n " " word (if (> n 1) "s" "")))
 
 (defn- arrival-time->spoken-text
   [arrival-time]
-  (let [total-seconds (int arrival-time)
-        minutes (quot total-seconds 60)
-        seconds (mod total-seconds 60)]
-    (if (zero? minutes)
-      (str seconds " second" (when-not (= seconds 1) "s"))
-      (str minutes " minute" (when-not (= minutes 1) "s")
-           " " seconds " second" (when-not (= seconds 1) "s")))))
+  (let [{:keys [minutes seconds]} (arrival-time->parts arrival-time)]
+    (str (when (pos? minutes)
+           (str (pluralize minutes "minute") " "))
+         (pluralize seconds "second"))))
 
 (defn floor-callout
   [{:keys [floor arrival-time]}]
@@ -141,6 +146,25 @@
         (delete-tree! child)))
     (.delete f)))
 
+(defn- build-audio-event
+  [tmp-dir idx entry]
+  (let [phrase (floor-callout entry)
+        clip-file (io/file tmp-dir (format "clip-%03d.wav" idx))
+        _ (println (format "[%03d] floor %d at %.3fs -> %s"
+                           idx
+                           (:floor entry)
+                           (double (:arrival-time entry))
+                           phrase))
+        _ (run-command! "say"
+                        "-o" (.getAbsolutePath clip-file)
+                        "--file-format=WAVE"
+                        "--data-format=LEI16@22050"
+                        phrase)
+        samples (read-clip-samples clip-file)
+        offset (long (Math/round (* sample-rate (:arrival-time entry))))]
+    {:sample-offset offset
+     :samples samples}))
+
 (defn build-audio-track!
   "Generates a WAV file with each floor callout starting at its arrival-time."
   ([config]
@@ -151,24 +175,7 @@
          tmp-dir (.toFile (Files/createTempDirectory "racepacer-" (make-array FileAttribute 0)))]
      (println (format "Generating %d callouts into %s" (count entries) output-path))
      (try
-       (let [events (map-indexed (fn [idx entry]
-                                   (let [phrase (floor-callout entry)
-                                         clip-file (io/file tmp-dir (format "clip-%03d.wav" idx))
-                                         _ (println (format "[%03d] floor %d at %.3fs -> %s"
-                                                            idx
-                                                            (:floor entry)
-                                                            (double (:arrival-time entry))
-                                                            phrase))
-                                         _ (run-command! "say"
-                                                         "-o" (.getAbsolutePath clip-file)
-                                                         "--file-format=WAVE"
-                                                         "--data-format=LEI16@22050"
-                                                         phrase)
-                                         samples (read-clip-samples clip-file)
-                                         offset (long (Math/round (* sample-rate (:arrival-time entry))))]
-                                     {:sample-offset offset
-                                      :samples samples}))
-                                 entries)
+       (let [events (map-indexed (partial build-audio-event tmp-dir) entries)
              mixed (mix-events events)
              wav-bytes (mixed->wav-bytes mixed)
              frame-count (quot (alength wav-bytes) (.getFrameSize target-format))]
